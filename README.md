@@ -23,3 +23,11 @@ PBChance is a LiveSplit component that displays the chance of obtaining a PB on 
 **It always displays "0%" or "-"**
 
 You may need to configure the plugin to use a different number of attempts. For instance, it may not be reading any attempts in which you've completed a run. Additionally, you may have reset your split data at some point, which will remove the data necessary for PBChance to calculate its probability. If you want to debug the issue, try opening your splits file in a text editor (it's XML formatted). You may be able to spot missing splits, and it will inform you how to configure the PBChance component.
+
+## Debug Mode:
+
+What do all these letters and numbers mean?
+RSS: Run Sample Size. Number of runs that survived first segment. We use this number for stats calculation so that the potentially inaccurate run counter isn't used, *EnNopp*.
+CSSC: Current Split Survival Chance. Probability that you'll make it past the current split.
+RSH: Number of runs that survived this split.
+RDH: Number of runs that reset on this split.
