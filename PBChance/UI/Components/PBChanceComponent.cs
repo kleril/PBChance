@@ -156,14 +156,14 @@ namespace PBChance.UI.Components
                         }
                     }
 
-                    if (lastSegment < State.Run.Count - 1)
+                    if (lastSegment < State.Run.Count - 1) //If run dies early
                     {
                         if (lastSegment == -1)
                         {
                             runSampleCount -= 1;
                         }
                         else
-                        {
+                        {                                     //TODO: Look at this after you've had coffee. Should this be +1 or +2
                             for (int deadSegments = lastSegment + 2; deadSegments < State.Run.Count; deadSegments++)
                             {
                                 numberOfRunsDeadBeforeSegment[deadSegments]++;
@@ -172,14 +172,35 @@ namespace PBChance.UI.Components
 
                         // Run didn't finish, add "reset" for the last known split
                         splits[lastSegment + 1].Add(null);
-
                     }
                 }
 
                 //Calculate split survival chance
                 for (int segment = 0; segment < State.Run.Count; segment++)
-                {
-                    splitSurvivalChance[segment] = (double)(numberOfRunsSurvivedSegment[segment]) / (double)(runSampleCount - numberOfRunsDeadBeforeSegment[segment]);
+                {                                                                                                             //numberOfRunsDeadBeforeSegment is 1 too low?
+                    int deadBeforeCurrentSegment = numberOfRunsDeadBeforeSegment[segment];
+                    int deadBeforeNextSegment;
+                    if (segment + 1 < State.Run.Count)
+                    {
+                        deadBeforeNextSegment = numberOfRunsDeadBeforeSegment[segment + 1];
+                    }
+                    else
+                    {
+                        deadBeforeNextSegment = numberOfRunsDeadBeforeSegment[segment];
+                    }
+                    /*
+                    numberOfRunsSurvivedSegment[State.CurrentSplitIndex]
+                    if (State.CurrentSplitIndex < numberOfRunsDeadBeforeSegment.Length - 1 && State.CurrentSplitIndex >= 0)
+                        {
+                            int deadBeforeCurrentSegment = numberOfRunsDeadBeforeSegment[State.CurrentSplitIndex];
+                            int deadBeforeNextSegment = numberOfRunsDeadBeforeSegment[State.CurrentSplitIndex + 1];
+                            int diedHere = deadBeforeNextSegment - deadBeforeCurrentSegment;*/
+
+                    int diedHere = runSampleCount - deadBeforeCurrentSegment - numberOfRunsSurvivedSegment[segment];
+
+                    splitSurvivalChance[segment] = (double)(numberOfRunsSurvivedSegment[segment]) / (double)(diedHere+numberOfRunsSurvivedSegment[segment]); //seems like it's off by one on counting dead runs, which is why the split is 90% instead of 100%
+                    //runSampleCount - deadBeforeCurrentSegment - numberOfRunsSurvivedSegment[segment];
+                    //splitSurvivalChance[segment] = (double)(numberOfRunsSurvivedSegment[segment]) / (double)(runSampleCount - deadBeforeCurrentSegment);
                 }
 
                 //RUN SURVIVAL CHANCE
@@ -199,7 +220,7 @@ namespace PBChance.UI.Components
         {
             if (Settings.DebugMode)
             {
-                InternalComponent.InformationName = "RSS,CSSC, RSH, RDH:"; //Run sample size, current split survival chance, #runs survived here, # runs died here;
+                InternalComponent.InformationName = "RSS,CSSC,DBS,RSH,RDH:"; //Run sample size, current split survival chance, #runs survived here, # runs died here;
             }
             else
             {
@@ -329,7 +350,7 @@ namespace PBChance.UI.Components
             if (Settings.DebugMode)
             {
                 if (State.CurrentSplitIndex < splitSurvivalChance.Length && State.CurrentSplitIndex >= 0)
-                { survivalString = Math.Round(100 * splitSurvivalChance[State.CurrentSplitIndex], 2).ToString(); }
+                { survivalString = Math.Round(100.00 * splitSurvivalChance[State.CurrentSplitIndex], 2).ToString(); }
                 else
                 { survivalString = "N/A"; }
 
@@ -339,12 +360,17 @@ namespace PBChance.UI.Components
                 else
                 { survivalCountString = "N/A"; }
 
+                string dbsString;
+                if (State.CurrentSplitIndex < numberOfRunsSurvivedSegment.Length && State.CurrentSplitIndex >= 0)
+                { dbsString = numberOfRunsDeadBeforeSegment[State.CurrentSplitIndex].ToString(); }
+                else
+                { dbsString = "N/A"; }
+
                 string deathCountString;
-                if (State.CurrentSplitIndex < numberOfRunsDeadBeforeSegment.Length-1 && State.CurrentSplitIndex >= 0)
+                if (State.CurrentSplitIndex < numberOfRunsDeadBeforeSegment.Length && State.CurrentSplitIndex >= 0)
                 {
                     int deadBeforeCurrentSegment = numberOfRunsDeadBeforeSegment[State.CurrentSplitIndex];
-                    int deadBeforeNextSegment = numberOfRunsDeadBeforeSegment[State.CurrentSplitIndex+1];
-                    int diedHere = deadBeforeNextSegment - deadBeforeCurrentSegment;
+                    int diedHere = runSampleCount - deadBeforeCurrentSegment - numberOfRunsSurvivedSegment[State.CurrentSplitIndex];
 
                     deathCountString = diedHere.ToString();
                 }
@@ -353,7 +379,7 @@ namespace PBChance.UI.Components
 
 
                 //InternalComponent.InformationName = "RSS,CSSC, RSH, RDH:"; //Run sample size, current split survival chance, #runs survived here, # runs died here;
-                text = runSampleCount + "," + survivalString + "," + survivalCountString + "," + deathCountString;
+                text = runSampleCount + "," + survivalString + "," + dbsString + "," + survivalCountString + "," + deathCountString;
             }
             InternalComponent.InformationValue = text;
         }
