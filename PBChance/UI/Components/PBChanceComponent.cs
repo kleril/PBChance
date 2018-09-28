@@ -32,6 +32,14 @@ namespace PBChance.UI.Components
         float IComponent.PaddingTop => InternalComponent.PaddingTop;
         float IComponent.VerticalHeight => InternalComponent.VerticalHeight;
 
+        //Split Data
+        List<Time?>[] splits;
+        private double[] runSurvivalChance;   //survivalChance[splitIndex]
+        private double[] splitSurvivalChance; //survivalChance[splitIndex]
+        int[] numberOfRunsSurvivedSegment;
+        int[] numberOfRunsDeadBeforeSegment;
+        private int runSampleCount;
+
         XmlNode IComponent.GetSettings(XmlDocument document)
         {
             return Settings.GetSettings(document);
@@ -51,12 +59,12 @@ namespace PBChance.UI.Components
         public PBChanceComponent(LiveSplitState state)
         {
             State = state;
-            InternalComponent = new InfoTextComponent("PB Chance                   .", "0.0%")
+            InternalComponent = new InfoTextComponent("PB / Survival Chance                   .", "0.0%, 0.0%")
             {
                 AlternateNameText = new string[]
                 {
-                    "PB Chance",
-                    "PB%:"
+                    "PB , Survival Chance",
+                    "PB,S%:"
                 }
             };
             Settings = new PBChanceSettings();
@@ -71,21 +79,150 @@ namespace PBChance.UI.Components
             state.OnStart += OnStart;
             state.RunManuallyModified += OnRunManuallyModified;
 
+            UpdateComponent();
+            RebuildSplitData();
             Recalculate();
+        }
+
+        private void RebuildSplitData()
+        {
+            // Create the lists of all split times
+            splits = new List<Time?>[State.Run.Count];
+            for (int i = 0; i < State.Run.Count; i++)
+            {
+                splits[i] = new List<Time?>();
+            }
+
+            // Find the range of attempts to gather times from
+            int lastAttempt = State.Run.AttemptHistory.Count;
+            int runCount = State.Run.AttemptHistory.Count;
+            if (!Settings.IgnoreRunCount)
+            {
+                runCount = State.Run.AttemptCount;
+                if (runCount > State.Run.AttemptHistory.Count)
+                {
+                    runCount = State.Run.AttemptHistory.Count;
+                }
+            }
+            int firstAttempt = lastAttempt / 2;
+            if (Settings.UseFixedAttempts)
+            {
+                // Fixed number of attempts
+                firstAttempt = lastAttempt - Settings.AttemptCount;
+
+                if (firstAttempt < State.Run.GetMinSegmentHistoryIndex())
+                {
+                    firstAttempt = State.Run.GetMinSegmentHistoryIndex();
+                }
+            }
+            else
+            {
+                // Percentage of attempts
+                firstAttempt = lastAttempt - runCount * Settings.AttemptCount / 100;
+                if (firstAttempt < State.Run.GetMinSegmentHistoryIndex())
+                {
+                    firstAttempt = State.Run.GetMinSegmentHistoryIndex();
+                }
+            }
+
+            runSampleCount = lastAttempt - firstAttempt;
+            if (runSampleCount >= 0)
+            {
+                splitSurvivalChance = new double[State.Run.Count]; //State.Run.Count = # Splits in a run
+                runSurvivalChance = new double[State.Run.Count];
+                numberOfRunsSurvivedSegment = new int[State.Run.Count];
+                numberOfRunsDeadBeforeSegment = new int[State.Run.Count];
+
+
+                // Gather split times
+                for (int a = firstAttempt; a < lastAttempt; a++)
+                {
+                    int lastSegment = -1;
+
+                    // Get split times from a single attempt
+                    for (int segment = 0; segment < State.Run.Count; segment++)
+                    {
+                        if (State.Run[segment].SegmentHistory == null || State.Run[segment].SegmentHistory.Count == 0)
+                        {
+                            InternalComponent.InformationValue = "-";
+                            return;
+                        }
+
+                        if (State.Run[segment].SegmentHistory.ContainsKey(a) && State.Run[segment].SegmentHistory[a][State.CurrentTimingMethod] > TimeSpan.Zero)
+                        {
+                            splits[segment].Add(State.Run[segment].SegmentHistory[a]);
+                            lastSegment = segment;
+                            numberOfRunsSurvivedSegment[segment]++;
+                        }
+                    }
+
+                    if (lastSegment < State.Run.Count - 1)
+                    {
+                        if (lastSegment == -1)
+                        {
+                            runSampleCount -= 1;
+                        }
+                        else
+                        {
+                            for (int deadSegments = lastSegment + 2; deadSegments < State.Run.Count; deadSegments++)
+                            {
+                                numberOfRunsDeadBeforeSegment[deadSegments]++;
+                            }
+                        }
+
+                        // Run didn't finish, add "reset" for the last known split
+                        splits[lastSegment + 1].Add(null);
+
+                    }
+                }
+
+                //Calculate split survival chance
+                for (int segment = 0; segment < State.Run.Count; segment++)
+                {
+                    splitSurvivalChance[segment] = (double)(numberOfRunsSurvivedSegment[segment]) / (double)(runSampleCount - numberOfRunsDeadBeforeSegment[segment]);
+                }
+
+                //RUN SURVIVAL CHANCE
+                // Run survival chance = product of chance to survive current and all subsequent splits
+                for (int segment = 0; segment < State.Run.Count; segment++)
+                {
+                    runSurvivalChance[segment] = splitSurvivalChance[segment];
+                    for (int futureSegments = segment + 1; futureSegments < State.Run.Count; futureSegments++)
+                    {
+                        runSurvivalChance[segment] = runSurvivalChance[segment] * splitSurvivalChance[futureSegments];
+                    }
+                }
+            }
+        }
+
+        private void UpdateComponent()
+        {
+            if (Settings.DebugMode)
+            {
+                InternalComponent.InformationName = "RSS,CSSC, RSH, RDH:"; //Run sample size, current split survival chance, #runs survived here, # runs died here;
+            }
+            else
+            {
+                InternalComponent.InformationName = "PB / Survival Chance                   .\n";
+            }
         }
 
         private void OnRunManuallyModified(object sender, EventArgs e)
         {
+            RebuildSplitData();
             Recalculate();
         }
 
         private void OnSettingChanged(object sender, EventArgs e)
         {
+            UpdateComponent();
+            RebuildSplitData();
             Recalculate();
         }
 
         private void OnStart(object sender, EventArgs e)
         {
+            RebuildSplitData();
             Recalculate();
         }
 
@@ -114,78 +251,11 @@ namespace PBChance.UI.Components
             // Get the current Personal Best, if it exists
             Time pb = State.Run.Last().PersonalBestSplitTime;
             
-            if(pb[State.CurrentTimingMethod] == TimeSpan.Zero)
+            if(pb[State.CurrentTimingMethod] == TimeSpan.Zero || runSampleCount <= 0)
             {
                 // No personal best, so any run will PB
-                InternalComponent.InformationValue = "100%";
+                InternalComponent.InformationValue = "100%, ?%";
                 return;
-            }
-
-            // Create the lists of split times
-            List<Time?>[] splits = new List<Time?>[State.Run.Count];
-            for(int i=0; i<State.Run.Count; i++)
-            {
-                splits[i] = new List<Time?>();
-            }
-
-            // Find the range of attempts to gather times from
-            int lastAttempt = State.Run.AttemptHistory.Count;
-            int runCount = State.Run.AttemptHistory.Count;
-            if (!Settings.IgnoreRunCount)
-            {
-                runCount = State.Run.AttemptCount;
-                if (runCount > State.Run.AttemptHistory.Count)
-                {
-                    runCount = State.Run.AttemptHistory.Count;
-                }
-            }
-            int firstAttempt = lastAttempt / 2;
-            if(Settings.UseFixedAttempts)
-            {
-                // Fixed number of attempts
-                firstAttempt = lastAttempt - Settings.AttemptCount;
-                
-                if (firstAttempt < State.Run.GetMinSegmentHistoryIndex())
-                {
-                    firstAttempt = State.Run.GetMinSegmentHistoryIndex();
-                }
-            }
-            else
-            {
-                // Percentage of attempts
-                firstAttempt = lastAttempt - runCount * Settings.AttemptCount / 100;
-                if(firstAttempt < State.Run.GetMinSegmentHistoryIndex())
-                {
-                    firstAttempt = State.Run.GetMinSegmentHistoryIndex();
-                }
-            }
-
-            // Gather split times
-            for (int a = firstAttempt; a < lastAttempt; a++)
-            {
-                int lastSegment = -1;
-
-                // Get split times from a single attempt
-                for (int segment = 0; segment < State.Run.Count; segment++)
-                {
-                    if (State.Run[segment].SegmentHistory == null || State.Run[segment].SegmentHistory.Count == 0)
-                    {
-                        InternalComponent.InformationValue = "-";
-                        return;
-                    }
-
-                    if (State.Run[segment].SegmentHistory.ContainsKey(a) && State.Run[segment].SegmentHistory[a][State.CurrentTimingMethod] > TimeSpan.Zero)
-                    {
-                        splits[segment].Add(State.Run[segment].SegmentHistory[a]);
-                        lastSegment = segment;
-                    }
-                }
-
-                if (lastSegment < State.Run.Count - 1)
-                {
-                    // Run didn't finish, add "reset" for the last known split
-                    splits[lastSegment + 1].Add(null);
-                }
             }
 
             // Calculate probability of PB
@@ -214,7 +284,7 @@ namespace PBChance.UI.Components
                         return;
                     }
 
-                    int attempt = rand.Next(splits[segment].Count);
+                    int attempt = rand.Next(splits[segment].Count-1);
                     Time? split = splits[segment][attempt];
                     if (split == null)
                     {
@@ -236,10 +306,54 @@ namespace PBChance.UI.Components
             }
 
             double prob = success / 10000.0;
-            string text = (prob * 100.0).ToString() + "%";
+
+            string probString = Math.Round(prob * 100.0, 2).ToString();
+            string survivalString;
+            try
+            {
+                if (State.CurrentSplitIndex < runSurvivalChance.Length && State.CurrentSplitIndex >= 0)
+                    {survivalString = Math.Round(100 * runSurvivalChance[State.CurrentSplitIndex], 2).ToString();}
+                else
+                    {survivalString = "N/A"; }
+            }
+            catch (Exception e)
+            {
+                survivalString = "err";
+            }
+            string text = probString + "," + survivalString + "%";
             if (Settings.DisplayOdds && prob > 0)
             {
                 text += " (1 in " + Math.Round(1 / prob, 2).ToString() + ")";
+            }
+
+            if (Settings.DebugMode)
+            {
+                if (State.CurrentSplitIndex < splitSurvivalChance.Length && State.CurrentSplitIndex >= 0)
+                { survivalString = Math.Round(100 * splitSurvivalChance[State.CurrentSplitIndex], 2).ToString(); }
+                else
+                { survivalString = "N/A"; }
+
+                string survivalCountString;
+                if (State.CurrentSplitIndex < numberOfRunsSurvivedSegment.Length && State.CurrentSplitIndex >= 0)
+                { survivalCountString = numberOfRunsSurvivedSegment[State.CurrentSplitIndex].ToString(); }
+                else
+                { survivalCountString = "N/A"; }
+
+                string deathCountString;
+                if (State.CurrentSplitIndex < numberOfRunsDeadBeforeSegment.Length-1 && State.CurrentSplitIndex >= 0)
+                {
+                    int deadBeforeCurrentSegment = numberOfRunsDeadBeforeSegment[State.CurrentSplitIndex];
+                    int deadBeforeNextSegment = numberOfRunsDeadBeforeSegment[State.CurrentSplitIndex+1];
+                    int diedHere = deadBeforeNextSegment - deadBeforeCurrentSegment;
+
+                    deathCountString = diedHere.ToString();
+                }
+                else
+                { deathCountString = "N/A"; }
+
+
+                //InternalComponent.InformationName = "RSS,CSSC, RSH, RDH:"; //Run sample size, current split survival chance, #runs survived here, # runs died here;
+                text = runSampleCount + "," + survivalString + "," + survivalCountString + "," + deathCountString;
             }
             InternalComponent.InformationValue = text;
         }

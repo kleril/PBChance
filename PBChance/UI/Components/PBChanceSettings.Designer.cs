@@ -35,6 +35,7 @@
             this.CreditsLabel = new System.Windows.Forms.Label();
             this.DisplayOddsCheckbox = new System.Windows.Forms.CheckBox();
             this.IgnoreRunCountBox = new System.Windows.Forms.CheckBox();
+            this.debugCheckBox = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.AttemptCountBox)).BeginInit();
             this.SuspendLayout();
             // 
@@ -122,10 +123,21 @@
             this.IgnoreRunCountBox.Text = "Use All Runs (Ignore Attempt Counter)";
             this.IgnoreRunCountBox.UseVisualStyleBackColor = true;
             // 
+            // debugCheckBox
+            // 
+            this.debugCheckBox.AutoSize = true;
+            this.debugCheckBox.Location = new System.Drawing.Point(6, 118);
+            this.debugCheckBox.Name = "debugCheckBox";
+            this.debugCheckBox.Size = new System.Drawing.Size(88, 17);
+            this.debugCheckBox.TabIndex = 7;
+            this.debugCheckBox.Text = "Debug Mode";
+            this.debugCheckBox.UseVisualStyleBackColor = true;
+            // 
             // PBChanceSettings
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.debugCheckBox);
             this.Controls.Add(this.IgnoreRunCountBox);
             this.Controls.Add(this.DisplayOddsCheckbox);
             this.Controls.Add(this.CreditsLabel);
@@ -134,7 +146,7 @@
             this.Controls.Add(this.PercentOfAttempts);
             this.Controls.Add(this.RecentLabel);
             this.Name = "PBChanceSettings";
-            this.Size = new System.Drawing.Size(289, 121);
+            this.Size = new System.Drawing.Size(289, 141);
             ((System.ComponentModel.ISupportInitialize)(this.AttemptCountBox)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -149,5 +161,6 @@
         private System.Windows.Forms.Label CreditsLabel;
         private System.Windows.Forms.CheckBox DisplayOddsCheckbox;
         private System.Windows.Forms.CheckBox IgnoreRunCountBox;
+        private System.Windows.Forms.CheckBox debugCheckBox;
     }
 }
