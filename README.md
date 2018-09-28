@@ -29,5 +29,6 @@ You may need to configure the plugin to use a different number of attempts. For 
 What do all these letters and numbers mean?  
 RSS: Run Sample Size. Number of runs that survived first segment. We use this number for stats calculation so that the potentially inaccurate run counter isn't used, *EnNopp*.  
 CSSC: Current Split Survival Chance. Probability that you'll make it past the current split.  
+DBS: Number of runs that died before this split.  
 RSH: Number of runs that survived this split.  
 RDH: Number of runs that reset on this split.  
